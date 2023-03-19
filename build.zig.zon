@@ -1,0 +1,15 @@
+.{
+    .name = "i2c",
+    .version = "0.0.1",
+
+    .dependencies = .{
+        .ImageMagick = .{
+            .url = "https://github.com/elerch/ImageMagick/archive/0c78c43ba348fe2d764593b074b4f53d087a3a26.tar.gz",
+            .hash = "12208162dcc0b1f2e5fb6376136fe5266b2b493a38ca8f30eff94b735f7da6ada462",
+        },
+        .libz = .{
+            .url="https://github.com/andrewrk/libz/archive/9e71b746b83d2b5bf5eb247663eb65a52cf0f68f.tar.gz",
+            .hash = "12204ea3490e5bdf379f56aa11784d906aed6d4c553c724fa5427169915f2cf4a651",
+        },
+    },
+}

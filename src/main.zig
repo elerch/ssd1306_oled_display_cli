@@ -129,7 +129,7 @@ fn sendPixelsThroughI2CDriver(pixels: []const u8, file: [*:0]const u8, device_id
 
 fn packPixelsToDeviceFormat(pixels: []const u8, packed_pixels: []u8) void {
     // Each u8 in pixels is a single bit. We need to pack these bits
-    for (packed_pixels) |*b, i| {
+    for (packed_pixels, 0..) |*b, i| {
         const column = i % WIDTH;
         const page = i / WIDTH;
 
