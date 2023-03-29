@@ -267,32 +267,7 @@ fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HE
     // status = c.MagickExtentImage(mw, WIDTH, HEIGHT, null, null);
     if (status == c.MagickFalse)
         return error.CouldNotSetExtent;
-    // TODO: move this into function
-    {
-        var annotation_pw = c.NewPixelWand();
-        defer {
-            if (annotation_pw) |pixw| annotation_pw = c.DestroyPixelWand(pixw);
-        }
-        var dw = c.NewDrawingWand();
-        defer {
-            if (dw) |d| dw = c.DestroyDrawingWand(d);
-        }
 
-        status = c.PixelSetColor(pw, "black");
-        if (status == c.MagickFalse)
-            return error.CouldNotSetColor;
-        c.DrawSetFillColor(dw, annotation_pw);
-
-        status = c.DrawSetFont(dw, "DejaVu-Serif");
-        if (status == c.MagickFalse)
-            return error.CouldNotSetFont;
-        c.DrawSetFontSize(dw, 20);
-        c.DrawSetStrokeColor(dw, annotation_pw);
-        c.DrawAnnotation(dw, 0, 0, "hello world");
-        status = c.MagickDrawImage(mw, dw);
-        if (status == c.MagickFalse)
-            return error.CouldNotDrawAnnotationOnImage;
-    }
     // We make the image monochrome by quantizing the image with 2 colors in the
     // gray colorspace. See:
     // https://www.imagemagick.org/Usage/quantize/#monochrome
