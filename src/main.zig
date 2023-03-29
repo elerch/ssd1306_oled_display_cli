@@ -292,24 +292,12 @@ fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HE
     if (status == c.MagickFalse)
         return error.CouldNotExportImage;
 
-    // Getting a compile error here that feels wrong...
-    // for (pixels) |*b| {
-    //     switch (b) {
-    //         0x00 => b.* = 0xFF,
-    //         0xFF => b.* = 0x00,
-    //         else => {},
-    //     }
-    // }
-
-    // To reverse...
-    var i: usize = 0;
-    while (i < WIDTH * HEIGHT) {
+    for (0..WIDTH * HEIGHT) |i| {
         switch (pixels[i]) {
             0x00 => pixels[i] = 0xFF,
             0xFF => pixels[i] = 0x00,
             else => {},
         }
-        i += 1;
     }
 }
 // fn annotateImage(im: *c.Image, x: u32, y: u32, text: []const u8, fontSize:  u32, color: []const u8 ) !void {
