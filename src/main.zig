@@ -120,10 +120,11 @@ fn sendPixelsThroughI2CDriver(pixels: []const u8, file: [*:0]const u8, device_id
 
     // Write data to device
     try i2cWrite(&i2c, &pixels_write_command);
-    var i: usize = 0;
-    while (i < HEIGHT) {
+    // var i: usize = 0;
+    // while (i < HEIGHT) {
+    for (0..HEIGHT) |i| {
         std.debug.print("{d:0>2}: {s}\n", .{ i, fmtSliceGreyscaleImage(pixels[(i * WIDTH)..((i + 1) * WIDTH)]) });
-        i += 1;
+        // i += 1;
     }
 }
 
