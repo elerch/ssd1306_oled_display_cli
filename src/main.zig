@@ -120,11 +120,8 @@ fn sendPixelsThroughI2CDriver(pixels: []const u8, file: [*:0]const u8, device_id
 
     // Write data to device
     try i2cWrite(&i2c, &pixels_write_command);
-    // var i: usize = 0;
-    // while (i < HEIGHT) {
     for (0..HEIGHT) |i| {
         std.debug.print("{d:0>2}: {s}\n", .{ i, fmtSliceGreyscaleImage(pixels[(i * WIDTH)..((i + 1) * WIDTH)]) });
-        // i += 1;
     }
 }
 
@@ -213,6 +210,7 @@ fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HE
     defer {
         if (mw) |w| mw = c.DestroyMagickWand(w);
     }
+    var merged: ?*c.MagickWand = undefined;
 
     // Reading an image into ImageMagick is problematic if it isn't a bmp
     // as the library needs a bunch of dependencies available
@@ -269,6 +267,34 @@ fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HE
     if (status == c.MagickFalse)
         return error.CouldNotSetExtent;
 
+    // At this point, we will add our text. This needs a whole lot more than this,
+    // but let's get started
+    {
+        // Create a second wand. Does this need to exist after the block?
+        var cw = c.NewMagickWand();
+        defer {
+            if (cw) |dw| cw = c.DestroyMagickWand(dw);
+            if (merged) |mergeme| {
+                _ = c.DestroyMagickWand(mw);
+                mw = mergeme;
+            }
+        }
+        const characters = @embedFile("images/test.bmp");
+        status = c.MagickReadImageBlob(cw, characters, characters.len);
+        if (status == c.MagickFalse) unreachable; // Something is terribly wrong if this fails
+
+        // I think I need to add the image, then flatten this
+        status = c.MagickAddImage(mw, cw);
+        if (status == c.MagickFalse) return error.CouldNotAddImage;
+
+        // This works, but idk exactly what it's doing. I get the sense
+        // I this only works with two images...
+        // c.MagickResetIterator(mw);
+        c.MagickSetFirstIterator(mw);
+        merged = c.MagickMergeImageLayers(mw, c.FlattenLayer);
+        // merged = c.MagickMergeImageLayers(mw, c.CompositeLayer);
+        // if (status == c.MagickFalse) return error.CouldNotFlattenImage;
+    }
     // We make the image monochrome by quantizing the image with 2 colors in the
     // gray colorspace. See:
     // https://www.imagemagick.org/Usage/quantize/#monochrome
@@ -277,7 +303,7 @@ fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HE
     //
     // We do this at the end so we have pure black and white. Otherwise the
     // resizing oprations will generate some greyscale that we don't want
-    status = c.MagickQuantizeImage(mw, // MagickWand
+    status = c.MagickQuantizeImage(merged, // MagickWand
         2, // Target number colors
         c.GRAYColorspace, // Colorspace
         1, // Optimal depth
@@ -288,7 +314,7 @@ fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HE
     if (status == c.MagickFalse)
         return error.CouldNotQuantizeImage;
 
-    status = c.MagickExportImagePixels(mw, 0, 0, WIDTH, HEIGHT, "I", c.CharPixel, @ptrCast(*anyopaque, pixels));
+    status = c.MagickExportImagePixels(merged, 0, 0, WIDTH, HEIGHT, "I", c.CharPixel, @ptrCast(*anyopaque, pixels));
 
     if (status == c.MagickFalse)
         return error.CouldNotExportImage;
