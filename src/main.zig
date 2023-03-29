@@ -300,30 +300,7 @@ fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HE
         }
     }
 }
-// fn annotateImage(im: *c.Image, x: u32, y: u32, text: []const u8, fontSize:  u32, color: []const u8 ) !void {
-// var image_info = c.CloneImageInfo(null);
-// defer c.DestroyImageInfo(image_info);
-//
-// var draw_info = c.CloneDrawInfo(image_info, null);
-// defer c.DestroyDrawInfo(draw_info);
-//
-// // var textBytes = []byte(text);
-// // var bytesPointer = unsafe.Pointer(&textBytes[0]);
-//
-// var textArray = (*c.uchar)(bytesPointer);
-//
-// var colorArray = c.CString(color);
-// defer c.free(unsafe.Pointer(colorArray));
-//
-// var draw_context = C.DrawAllocateContext(draw_info, im.image);
-// defer C.DrawDestroyContext(draw_context);
-//
-// c.DrawSetFontSize(draw_context, C.double(fontSize));
-// c.DrawSetStrokeColorString(draw_context, colorArray);
-// c.DrawSetFillColorString(draw_context, colorArray);
-// c.DrawAnnotation(draw_context, C.double(x), C.double(y), textArray);
-// c.DrawRender(draw_context);
-// }
+
 const Dimensions = struct {
     width: usize,
     height: usize,
