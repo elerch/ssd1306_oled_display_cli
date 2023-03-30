@@ -60,13 +60,13 @@ pub fn main() !void {
     }
     var is_filename = false;
     var line_number: ?usize = null;
-    for (args) |arg| {
+    for (args, 0..) |arg, i| {
         if (std.mem.eql(u8, "-bg", arg)) {
             is_filename = true;
             continue;
         }
         if (is_filename) {
-            filename = arg;
+            filename = args[i]; // arg capture changes value...
             break;
         }
         if (arg[0] == '-' and areDigits(arg[1..])) {
@@ -82,9 +82,9 @@ pub fn main() !void {
                 std.os.exit(1);
             }
             std.debug.print("line {d} text: \"{s}\"\n", .{ line, arg });
-            lines[line] = &arg;
+            lines[line] = &args[i];
             line_number = null;
-            break;
+            continue;
         }
     }
 
