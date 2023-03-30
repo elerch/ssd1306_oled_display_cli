@@ -1,4 +1,5 @@
 const std = @import("std");
+const chars = @import("images/images.zig").chars;
 
 // The package manager will install headers from our dependency in zig's build
 // cache and include the cache directory as a "-I" option on the build command
@@ -8,9 +9,18 @@ const c = @cImport({
     @cInclude("i2cdriver.h");
 });
 
+// Image specifications
 const WIDTH = 128;
 const HEIGHT = 64;
 
+// Text specifications
+const FONT_WIDTH = 5;
+const FONT_HEIGHT = 8;
+
+const CHARS_PER_LINE = 21; // 21 * 6 = 126 so we have 2px left over
+const LINES = 8;
+
+// Device specifications
 const PAGES = 8;
 
 fn usage(args: [][]u8) !void {
@@ -263,7 +273,6 @@ fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HE
         -@intCast(isize, (HEIGHT - resize_dimensions.height) / 2),
     );
 
-    // status = c.MagickExtentImage(mw, WIDTH, HEIGHT, null, null);
     if (status == c.MagickFalse)
         return error.CouldNotSetExtent;
 
@@ -282,6 +291,37 @@ fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HE
         const characters = @embedFile("images/test.bmp");
         status = c.MagickReadImageBlob(cw, characters, characters.len);
         if (status == c.MagickFalse) unreachable; // Something is terribly wrong if this fails
+
+        // For character placement, we need to set the image to the correct
+        // extent, and offset the image as appropriate. When we set the extent,
+        // we need the fill background to be transparent so we don't overwrite
+        // the background. This also means our font needs a transparent background
+        // (maybe?)
+        {
+            var pwc = c.NewPixelWand();
+            defer {
+                if (pwc) |pixwc| pwc = c.DestroyPixelWand(pixwc);
+            }
+            status = c.PixelSetColor(pwc, "transparent");
+            if (status == c.MagickFalse)
+                return error.CouldNotSetColor;
+
+            status = c.MagickSetImageBackgroundColor(cw, pwc);
+            if (status == c.MagickFalse)
+                return error.CouldNotSetBackgroundColor;
+            // I think our characters are offset by 6px in the x and 8 in the y
+            status = c.MagickExtentImage(
+                cw,
+                WIDTH,
+                HEIGHT,
+                -6 * 8,
+                -8,
+                // -@intCast(isize, (WIDTH - resize_dimensions.width) / 2),
+                // -@intCast(isize, (HEIGHT - resize_dimensions.height) / 2),
+            );
+            if (status == c.MagickFalse)
+                return error.CouldNotSetExtent;
+        }
 
         // I think I need to add the image, then flatten this
         status = c.MagickAddImage(mw, cw);

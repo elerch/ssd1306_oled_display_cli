@@ -1,6 +1,7 @@
 const std = @import("std");
+const AsciiPrintableStep = @import("AsciiPrintableStep.zig");
 
-pub fn build(b: *std.build.Builder) void {
+pub fn build(b: *std.build.Builder) !void {
     // comptime {
     //     const current_zig = builtin.zig_version;
     //     const min_zig = std.SemanticVersion.parse("0.11.0-dev.1254+1f8f79cd5") catch return; // add helper functions to std.zig.Ast
@@ -45,6 +46,8 @@ pub fn build(b: *std.build.Builder) void {
     exe.addIncludePath("lib/i2cdriver");
     exe.install();
 
+    exe.step.dependOn(&AsciiPrintableStep.create(b, .{ .path = "src/images" }).step);
+    // exe.step.dependOn((try fontGeneration(b, target)));
     const run_cmd = exe.run();
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| {
@@ -62,4 +65,15 @@ pub fn build(b: *std.build.Builder) void {
 
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&exe_tests.step);
+}
+
+// Should be able to remove this
+fn fontGeneration(b: *std.build.Builder, target: anytype) !*std.build.Step {
+    if (target.getOs().tag != .linux) return error.UnsupportedBuildOS;
+    const fontgen = b.step("gen", "Generate font image files");
+    fontgen.dependOn(&b.addSystemCommand(&.{ "/bin/sh", "-c", "./fontgen" }).step);
+
+    // This can probably be triggered instead by GitRepoStep cloning the repo
+    // exe.step.dependOn(cg);
+    return fontgen;
 }
