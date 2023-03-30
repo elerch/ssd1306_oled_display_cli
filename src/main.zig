@@ -275,18 +275,8 @@ fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HE
     if (status == c.MagickFalse)
         return error.CouldNotSetExtent;
 
-    mw = try drawCharacter(
-        mw.?,
-        '4',
-        -5 * 3,
-        -8,
-    );
-    mw = try drawCharacter(
-        mw.?,
-        '2',
-        -5 * 4,
-        -8,
-    );
+    mw = try drawString(mw, "hello, world!", 30, 38);
+
     // We make the image monochrome by quantizing the image with 2 colors in the
     // gray colorspace. See:
     // https://www.imagemagick.org/Usage/quantize/#monochrome
@@ -318,6 +308,18 @@ fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HE
             else => {},
         }
     }
+}
+fn drawString(mw: ?*c.MagickWand, str: []const u8, x: isize, y: isize) !?*c.MagickWand {
+    var rc = mw;
+    for (str, 0..) |ch, i| {
+        rc = try drawCharacter(
+            rc,
+            ch,
+            -(x + @intCast(isize, FONT_WIDTH * i)),
+            -y,
+        );
+    }
+    return rc;
 }
 
 fn drawCharacter(mw: ?*c.MagickWand, char: u8, x: isize, y: isize) !?*c.MagickWand {
