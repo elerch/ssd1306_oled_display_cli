@@ -220,7 +220,6 @@ fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HE
     defer {
         if (mw) |w| mw = c.DestroyMagickWand(w);
     }
-    var merged: ?*c.MagickWand = undefined;
 
     // Reading an image into ImageMagick is problematic if it isn't a bmp
     // as the library needs a bunch of dependencies available
@@ -276,65 +275,18 @@ fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HE
     if (status == c.MagickFalse)
         return error.CouldNotSetExtent;
 
-    // At this point, we will add our text. This needs a whole lot more than this,
-    // but let's get started
-    {
-        // Create a second wand. Does this need to exist after the block?
-        var cw = c.NewMagickWand();
-        defer {
-            if (cw) |dw| cw = c.DestroyMagickWand(dw);
-            if (merged) |mergeme| {
-                _ = c.DestroyMagickWand(mw);
-                mw = mergeme;
-            }
-        }
-        const characters = @embedFile("images/test.bmp");
-        status = c.MagickReadImageBlob(cw, characters, characters.len);
-        if (status == c.MagickFalse) unreachable; // Something is terribly wrong if this fails
-
-        // For character placement, we need to set the image to the correct
-        // extent, and offset the image as appropriate. When we set the extent,
-        // we need the fill background to be transparent so we don't overwrite
-        // the background. This also means our font needs a transparent background
-        // (maybe?)
-        {
-            var pwc = c.NewPixelWand();
-            defer {
-                if (pwc) |pixwc| pwc = c.DestroyPixelWand(pixwc);
-            }
-            status = c.PixelSetColor(pwc, "transparent");
-            if (status == c.MagickFalse)
-                return error.CouldNotSetColor;
-
-            status = c.MagickSetImageBackgroundColor(cw, pwc);
-            if (status == c.MagickFalse)
-                return error.CouldNotSetBackgroundColor;
-            // I think our characters are offset by 6px in the x and 8 in the y
-            status = c.MagickExtentImage(
-                cw,
-                WIDTH,
-                HEIGHT,
-                -6 * 8,
-                -8,
-                // -@intCast(isize, (WIDTH - resize_dimensions.width) / 2),
-                // -@intCast(isize, (HEIGHT - resize_dimensions.height) / 2),
-            );
-            if (status == c.MagickFalse)
-                return error.CouldNotSetExtent;
-        }
-
-        // I think I need to add the image, then flatten this
-        status = c.MagickAddImage(mw, cw);
-        if (status == c.MagickFalse) return error.CouldNotAddImage;
-
-        // This works, but idk exactly what it's doing. I get the sense
-        // I this only works with two images...
-        // c.MagickResetIterator(mw);
-        c.MagickSetFirstIterator(mw);
-        merged = c.MagickMergeImageLayers(mw, c.FlattenLayer);
-        // merged = c.MagickMergeImageLayers(mw, c.CompositeLayer);
-        // if (status == c.MagickFalse) return error.CouldNotFlattenImage;
-    }
+    mw = try drawCharacter(
+        mw.?,
+        '4',
+        -5 * 3,
+        -8,
+    );
+    mw = try drawCharacter(
+        mw.?,
+        '2',
+        -5 * 4,
+        -8,
+    );
     // We make the image monochrome by quantizing the image with 2 colors in the
     // gray colorspace. See:
     // https://www.imagemagick.org/Usage/quantize/#monochrome
@@ -343,7 +295,7 @@ fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HE
     //
     // We do this at the end so we have pure black and white. Otherwise the
     // resizing oprations will generate some greyscale that we don't want
-    status = c.MagickQuantizeImage(merged, // MagickWand
+    status = c.MagickQuantizeImage(mw, // MagickWand
         2, // Target number colors
         c.GRAYColorspace, // Colorspace
         1, // Optimal depth
@@ -354,7 +306,7 @@ fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HE
     if (status == c.MagickFalse)
         return error.CouldNotQuantizeImage;
 
-    status = c.MagickExportImagePixels(merged, 0, 0, WIDTH, HEIGHT, "I", c.CharPixel, @ptrCast(*anyopaque, pixels));
+    status = c.MagickExportImagePixels(mw, 0, 0, WIDTH, HEIGHT, "I", c.CharPixel, @ptrCast(*anyopaque, pixels));
 
     if (status == c.MagickFalse)
         return error.CouldNotExportImage;
@@ -366,6 +318,64 @@ fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HE
             else => {},
         }
     }
+}
+
+fn drawCharacter(mw: ?*c.MagickWand, char: u8, x: isize, y: isize) !?*c.MagickWand {
+    // Create a second wand. Does this need to exist after the block?
+    var cw = c.NewMagickWand();
+    defer {
+        if (cw) |dw| cw = c.DestroyMagickWand(dw);
+        // if (merged) |mergeme| {
+        //     _ = c.DestroyMagickWand(mw);
+        //     mw = mergeme;
+        // }
+    }
+    const image_char = chars[char];
+    if (image_char.len == 0) return error.CharacterNotSupported;
+    var status = c.MagickReadImageBlob(cw, @ptrCast(?*const anyopaque, image_char), image_char.len);
+    if (status == c.MagickFalse) unreachable; // Something is terribly wrong if this fails
+
+    // For character placement, we need to set the image to the correct
+    // extent, and offset the image as appropriate. When we set the extent,
+    // we need the fill background to be transparent so we don't overwrite
+    // the background. This also means our font needs a transparent background
+    // (maybe?)
+    {
+        var pwc = c.NewPixelWand();
+        defer {
+            if (pwc) |pixwc| pwc = c.DestroyPixelWand(pixwc);
+        }
+        status = c.PixelSetColor(pwc, "transparent");
+        if (status == c.MagickFalse)
+            return error.CouldNotSetColor;
+
+        status = c.MagickSetImageBackgroundColor(cw, pwc);
+        if (status == c.MagickFalse)
+            return error.CouldNotSetBackgroundColor;
+        // I think our characters are offset by 6px in the x and 8 in the y
+        status = c.MagickExtentImage(
+            cw,
+            WIDTH,
+            HEIGHT,
+            x,
+            y,
+        );
+        if (status == c.MagickFalse)
+            return error.CouldNotSetExtent;
+    }
+
+    // I think I need to add the image, then flatten this
+    status = c.MagickAddImage(mw, cw);
+    if (status == c.MagickFalse) return error.CouldNotAddImage;
+
+    // This works, but idk exactly what it's doing. I get the sense
+    // I this only works with two images...
+    // c.MagickResetIterator(mw);
+    c.MagickSetFirstIterator(mw);
+    defer {
+        if (mw) |w| _ = c.DestroyMagickWand(w);
+    }
+    return c.MagickMergeImageLayers(mw, c.FlattenLayer);
 }
 
 const Dimensions = struct {

@@ -57,7 +57,7 @@ fn make(step: *std.build.Step, _: *std.Progress.Node) !void {
         });
         defer file.close();
         const writer = file.writer();
-        try writer.print("const chars = [_][]u8 {{\n", .{});
+        try writer.print("pub const chars = &[_][]const u8{{\n", .{});
 
         for (0..32) |_| {
             try writer.print("  \"\",\n", .{});
