@@ -17,15 +17,17 @@ const HEIGHT = 64;
 const FONT_WIDTH = 5;
 const FONT_HEIGHT = 8;
 
-const CHARS_PER_LINE = 21; // 21 * 6 = 126 so we have 2px left over
+const CHARS_PER_LINE = 25; // 25 * 5 = 125 so we have 3px left over
+const BORDER_LEFT = 1; // 1 empty px left, 2 empty on right
 const LINES = 8;
 
 // Device specifications
 const PAGES = 8;
 
+// const lines = [LINES][]const u8
 fn usage(args: [][]u8) !void {
     const stderr = std.io.getStdErr();
-    try stderr.writer().print("usage: {s} <image file> <device>\n", .{args[0]}); // TODO: will need more
+    try stderr.writer().print("usage: {s} <device> [-bg <image file>]\n", .{args[0]}); // TODO: will need more
     std.os.exit(1);
 }
 pub fn main() !void {
@@ -33,9 +35,9 @@ pub fn main() !void {
     //defer alloc.deinit();
     const args = try std.process.argsAlloc(alloc);
     defer std.process.argsFree(alloc, args);
-    if (args.len < 3) try usage(args);
+    if (args.len < 2) try usage(args);
     const prefix = "/dev/ttyUSB";
-    const device = try alloc.dupeZ(u8, args[2]);
+    const device = try alloc.dupeZ(u8, args[1]);
     defer alloc.free(device);
     if (!std.mem.startsWith(u8, device, prefix)) try usage(args);
 
@@ -47,8 +49,22 @@ pub fn main() !void {
     const stdout = bw.writer();
     defer bw.flush() catch unreachable; // don't forget to flush!
 
-    const filename = args[1];
-    try stdout.print("Converting {s}\n", .{filename});
+    // Is this ceremony really needed?
+    var b: [1]u8 = undefined;
+    var filename: [:0]u8 = try std.fmt.bufPrintZ(&b, "", .{});
+    var is_filename = false;
+    for (args) |arg| {
+        if (std.mem.eql(u8, "-bg", arg)) {
+            is_filename = true;
+            continue;
+        }
+        if (is_filename) {
+            filename = arg;
+            break;
+        }
+    }
+
+    if (filename.len > 0) try stdout.print("Converting {s}\n", .{filename});
     var pixels: [WIDTH * HEIGHT]u8 = undefined;
     try convertImage(alloc, filename, &pixels);
     // try convertImage(alloc, filename, &pixels);
@@ -223,8 +239,13 @@ fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HE
 
     // Reading an image into ImageMagick is problematic if it isn't a bmp
     // as the library needs a bunch of dependencies available
-    // var status = c.MagickReadImage(mw, "logo:");
-    var status = c.MagickReadImage(mw, filename);
+    var status: c.MagickBooleanType = undefined;
+    if (filename.len > 0) {
+        status = c.MagickReadImage(mw, filename);
+    } else {
+        const blob = @embedFile("images/blank.bmp");
+        status = c.MagickReadImageBlob(mw, blob, blob.len);
+    }
     if (status == c.MagickFalse) {
         if (!std.mem.eql(u8, filename[filename.len - 3 ..], "bmp"))
             try std.io.getStdErr().writer().print("File is not .bmp. That is probably the problem\n", .{});
@@ -275,7 +296,7 @@ fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HE
     if (status == c.MagickFalse)
         return error.CouldNotSetExtent;
 
-    mw = try drawString(mw, "hello, world!", 30, 38);
+    mw = try drawString(mw, "I like pizza!", 30, 38);
 
     // We make the image monochrome by quantizing the image with 2 colors in the
     // gray colorspace. See:
