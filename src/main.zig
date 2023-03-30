@@ -24,10 +24,13 @@ const LINES = 8;
 // Device specifications
 const PAGES = 8;
 
-// const lines = [LINES][]const u8
+var lines: [LINES]*const [:0]u8 = undefined;
+
 fn usage(args: [][]u8) !void {
-    const stderr = std.io.getStdErr();
-    try stderr.writer().print("usage: {s} <device> [-bg <image file>]\n", .{args[0]}); // TODO: will need more
+    const writer = std.io.getStdErr().writer();
+    try writer.print("usage: {s} <device> [-bg <image file>] [-<num> text]...\n", .{args[0]});
+    try writer.print("\t-<num> text: line number and text to display\n", .{});
+    try writer.print("\te.g. \"-1 'hello world'\" will display \"hello world\" on line 1\n", .{});
     std.os.exit(1);
 }
 pub fn main() !void {
@@ -49,10 +52,14 @@ pub fn main() !void {
     const stdout = bw.writer();
     defer bw.flush() catch unreachable; // don't forget to flush!
 
-    // Is this ceremony really needed?
+    var filename: [:0]u8 = @constCast("");
     var b: [1]u8 = undefined;
-    var filename: [:0]u8 = try std.fmt.bufPrintZ(&b, "", .{});
+    const nothing: [:0]u8 = try std.fmt.bufPrintZ(&b, "", .{});
+    for (lines, 0..) |_, i| {
+        lines[i] = &nothing;
+    }
     var is_filename = false;
+    var line_number: ?usize = null;
     for (args) |arg| {
         if (std.mem.eql(u8, "-bg", arg)) {
             is_filename = true;
@@ -62,11 +69,28 @@ pub fn main() !void {
             filename = arg;
             break;
         }
+        if (arg[0] == '-' and areDigits(arg[1..])) {
+            line_number = try std.fmt.parseInt(usize, arg[1..], 10);
+            continue;
+        }
+        if (line_number) |line| {
+            if (arg.len > CHARS_PER_LINE) {
+                try std.io.getStdErr().writer().print(
+                    "ERROR: text for line {d} has {d} chars, exceeding maximum length {d}\n",
+                    .{ line, arg.len, CHARS_PER_LINE },
+                );
+                std.os.exit(1);
+            }
+            std.debug.print("line {d} text: \"{s}\"\n", .{ line, arg });
+            lines[line] = &arg;
+            line_number = null;
+            break;
+        }
     }
 
     if (filename.len > 0) try stdout.print("Converting {s}\n", .{filename});
     var pixels: [WIDTH * HEIGHT]u8 = undefined;
-    try convertImage(alloc, filename, &pixels);
+    try convertImage(alloc, filename, &pixels, textForLine);
     // try convertImage(alloc, filename, &pixels);
     try stdout.print("Sending pixels to display\n", .{});
     // var i: usize = 0;
@@ -82,6 +106,13 @@ pub fn main() !void {
     try stdout.print("done\n", .{});
 
     // try stdout.print("Run `zig build test` to run the tests.\n", .{});
+}
+
+fn areDigits(bytes: []u8) bool {
+    for (bytes) |byte| {
+        if (!std.ascii.isDigit(byte)) return false;
+    }
+    return true;
 }
 
 fn sendPixels(pixels: []const u8, file: [:0]const u8, device_id: u8) !void {
@@ -228,7 +259,10 @@ fn reportMagickError(mw: ?*c.MagickWand) !void {
     defer description = @ptrCast([*c]u8, c.MagickRelinquishMemory(description));
     try std.io.getStdErr().writer().print("{s}\n", .{description});
 }
-fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HEIGHT]u8) !void {
+fn textForLine(line: usize) []u8 {
+    return lines[line].*;
+}
+fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HEIGHT]u8, text_fn: *const fn (usize) []u8) !void {
     _ = alloc;
     c.MagickWandGenesis();
     defer c.MagickWandTerminus();
@@ -296,7 +330,24 @@ fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HE
     if (status == c.MagickFalse)
         return error.CouldNotSetExtent;
 
-    mw = try drawString(mw, "I like pizza!", 30, 38);
+    for (0..LINES) |i| {
+        const text = text_fn(i);
+        if (text.len == 0) continue;
+        // We have text!
+        const y: isize = FONT_HEIGHT * @intCast(isize, i);
+        var x: isize = BORDER_LEFT;
+        var left_spaces: isize = 0;
+        for (text) |ch| {
+            if (ch == ' ') {
+                left_spaces += 1;
+                continue;
+            }
+            break;
+        }
+        std.debug.print("left_spaces: {d}. Text: \"{s}\"\n", .{ left_spaces, text });
+        x += (FONT_WIDTH * left_spaces);
+        mw = try drawString(mw, text[@intCast(usize, left_spaces)..], x, y);
+    }
 
     // We make the image monochrome by quantizing the image with 2 colors in the
     // gray colorspace. See:
