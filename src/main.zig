@@ -157,7 +157,7 @@ fn packPixelsToDeviceFormat(pixels: []const u8, packed_pixels: []u8) void {
         const column = i % WIDTH;
         const page = i / WIDTH;
 
-        if (column == 0) std.debug.print("{d}: ", .{page});
+        // if (column == 0) std.debug.print("{d}: ", .{page});
         // pixel array will be 8x as "high" as the data array we are sending to
         // the device. So the device column above is only our starter
         // Display has 8 pages, which is a set of 8 pixels with LSB at top of page
@@ -188,8 +188,8 @@ fn packPixelsToDeviceFormat(pixels: []const u8, packed_pixels: []u8) void {
             (pixels[(6 + row) * WIDTH + column] & 0x01) << 6 |
             (pixels[(7 + row) * WIDTH + column] & 0x01) << 7;
 
-        std.debug.print("{s}", .{std.fmt.fmtSliceHexLower(&[_]u8{b.*})});
-        if (column == 127) std.debug.print("\n", .{});
+        // std.debug.print("{s}", .{std.fmt.fmtSliceHexLower(&[_]u8{b.*})});
+        // if (column == 127) std.debug.print("\n", .{});
 
         // Last 2 pages are yellow...16 pixels vertical
         // if (page == 6 or page == 7) b.* = 0xff;
