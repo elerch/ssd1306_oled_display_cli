@@ -46,6 +46,10 @@ pub fn build(b: *std.build.Builder) !void {
     exe.addIncludePath("lib/i2cdriver");
     exe.install();
 
+    // TODO: I believe we can use runArtifact on a second
+    // exe with a different source file for font generation
+    // taking us to a series of 5 byte arrays for each
+    // character in a font.
     exe.step.dependOn(&AsciiPrintableStep.create(b, .{ .path = "src/images" }).step);
     // exe.step.dependOn((try fontGeneration(b, target)));
     const run_cmd = exe.run();

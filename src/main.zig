@@ -277,6 +277,12 @@ fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HE
     if (filename.len > 0) {
         status = c.MagickReadImage(mw, filename);
     } else {
+        // TODO: if there is no background image AND
+        // we precompute monochrome bit patterns for our font
+        // we can completely avoid ImageMagick here. Even with
+        // a background we can do the conversion, then do our
+        // own text overlay after monochrome conversion.
+        // Faster and smaller binary (maybe multi-font support?)
         const blob = @embedFile("images/blank.bmp");
         status = c.MagickReadImageBlob(mw, blob, blob.len);
     }
