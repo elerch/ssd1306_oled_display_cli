@@ -54,12 +54,6 @@ pub fn main() !void {
     var pixels: [WIDTH * HEIGHT]u8 = undefined;
     try convertImage(alloc, opts.background_filename, &pixels, textForLine);
     try bw.flush();
-    // var i: usize = 0;
-    // while (i < HEIGHT) {
-    //     try stdout.print("{d:0>2}: {s}\n", .{ i, fmtSliceGreyscaleImage(pixels[(i * WIDTH)..((i + 1) * WIDTH)]) });
-    //     // try stdout.print("{d:0>2}: {s}\n", .{ i, std.fmt.fmtSliceHexLower(pixels[(i * WIDTH)..((i + 1) * WIDTH)]) });
-    //     i += 1;
-    // }
 
     // We should take the linux device file here, then inspect for ttyUSB vs
     // i2c whatever and do the right thing from there...
