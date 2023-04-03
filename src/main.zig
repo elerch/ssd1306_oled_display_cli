@@ -91,7 +91,6 @@ pub fn main() !void {
     if (filename.len > 0) try stdout.print("Converting {s}\n", .{filename});
     var pixels: [WIDTH * HEIGHT]u8 = undefined;
     try convertImage(alloc, filename, &pixels, textForLine);
-    // try convertImage(alloc, filename, &pixels);
     try stdout.print("Sending pixels to display\n", .{});
     // var i: usize = 0;
     // while (i < HEIGHT) {
