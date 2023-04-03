@@ -488,23 +488,6 @@ fn getNewDimensions(width: usize, height: usize, desired_width: usize, desired_h
     };
 }
 
-fn logo() !void {
-    c.MagickWandGenesis();
-
-    // Create a wand
-    var mw = c.NewMagickWand();
-
-    // Read the input image
-    _ = c.MagickReadImage(mw, "logo:"); // TODO: What is the return val?
-    // write it
-    _ = c.MagickWriteImage(mw, "logo.jpg"); // TODO: What is the return val?
-
-    // Tidy up
-    if (mw) |w| mw = c.DestroyMagickWand(w);
-
-    c.MagickWandTerminus();
-}
-
 test "gets correct bytes" {
     const bg_file: [:0]u8 = @constCast("logo:");
     const opts = .{ .background_filename = bg_file, .device_file = "-" };
