@@ -52,7 +52,7 @@ pub fn main() !void {
     defer alloc.destroy(opts);
     if (opts.background_filename.len > 0) try stdout.print("Converting {s}\n", .{opts.background_filename});
     var pixels: [WIDTH * HEIGHT]u8 = undefined;
-    try convertImage(alloc, opts.background_filename, &pixels, textForLine);
+    try convertImage(opts.background_filename, &pixels, textForLine);
     try bw.flush();
 
     // We should take the linux device file here, then inspect for ttyUSB vs
@@ -276,8 +276,7 @@ fn reportMagickError(mw: ?*c.MagickWand) !void {
 fn textForLine(line: usize) []u8 {
     return lines[line].*;
 }
-fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HEIGHT]u8, text_fn: *const fn (usize) []u8) !void {
-    _ = alloc;
+fn convertImage(filename: [:0]u8, pixels: *[WIDTH * HEIGHT]u8, text_fn: *const fn (usize) []u8) !void {
     c.MagickWandGenesis();
     defer c.MagickWandTerminus();
     var mw = c.NewMagickWand();
@@ -506,6 +505,38 @@ fn logo() !void {
     c.MagickWandTerminus();
 }
 
+test "gets correct bytes" {
+    const bg_file: [:0]u8 = @constCast("logo:");
+    const opts = .{ .background_filename = bg_file, .device_file = "-" };
+    const empty: [:0]u8 = @constCast("");
+    for (&lines) |*line| {
+        line.* = &empty;
+    }
+    const line: [:0]u8 = @constCast("Hello\\!");
+    lines[5] = &line;
+    var pixels: [WIDTH * HEIGHT]u8 = undefined;
+
+    var expected_pixels: *const [WIDTH * HEIGHT]u8 = @embedFile("testExpectedBytes.bin");
+
+    // [_]u8{..,..,..}
+    try convertImage(opts.background_filename, &pixels, textForLine);
+    // try writeBytesToFile("testExpectedBytes.bin", &pixels);
+    try std.testing.expectEqualSlices(u8, expected_pixels, &pixels);
+}
+fn writeBytesToFile(filename: []const u8, bytes: []u8) !void {
+    const file = try std.fs.cwd().createFile(filename, .{
+        .read = false,
+        .truncate = true,
+        .lock = .Exclusive,
+        .lock_nonblocking = false,
+        .mode = 0o666,
+        .intended_io_mode = .blocking,
+    });
+    defer file.close();
+    const writer = file.writer();
+    try writer.writeAll(bytes);
+    // try writer.print("pub const chars = &[_][]const u8{{\n", .{});
+}
 test "simple test" {
     var list = std.ArrayList(i32).init(std.testing.allocator);
     defer list.deinit(); // try commenting this out and see if zig detects the memory leak!

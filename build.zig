@@ -66,9 +66,13 @@ pub fn build(b: *std.build.Builder) !void {
         .target = target,
         .optimize = optimize,
     });
+    exe_tests.linkLibrary(im_dep.artifact("MagickWand"));
+    exe_tests.linkLibrary(z_dep.artifact("z"));
+    exe_tests.linkLibrary(i2cdriver);
+    exe_tests.addIncludePath("lib/i2cdriver");
 
     const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&exe_tests.step);
+    test_step.dependOn(&exe_tests.run().step);
 }
 
 // Should be able to remove this
