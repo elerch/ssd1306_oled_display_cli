@@ -172,6 +172,7 @@ fn sendPixelsThroughI2CDriver(pixels: []const u8, file: [*:0]const u8, device_id
     defer bw.flush() catch unreachable; // don't forget to flush!
     try stdout.print("Connecting to I2CDriver on {s}. If progress stalls, unplug device and re-insert.\n", .{c_file});
     try bw.flush();
+    try stdout.print("Sending pixels to display...", .{});
     c.i2c_connect(&i2c, c_file);
     try stdout.print("Device connected\n", .{});
     if (i2c.connected != 1) return error.I2CConnectionFailed;
@@ -194,9 +195,11 @@ fn sendPixelsThroughI2CDriver(pixels: []const u8, file: [*:0]const u8, device_id
 
     // Write data to device
     try i2cWrite(&i2c, &pixels_write_command);
-    for (0..HEIGHT) |i| {
-        std.debug.print("{d:0>2}: {s}\n", .{ i, fmtSliceGreyscaleImage(pixels[(i * WIDTH)..((i + 1) * WIDTH)]) });
-    }
+    // Leaving this here because we'll need it later I think
+    // for (0..HEIGHT) |i| {
+    //     std.log.debug("{d:0>2}: {s}\n", .{ i, fmtSliceGreyscaleImage(pixels[(i * WIDTH)..((i + 1) * WIDTH)]) });
+    // }
+    try stdout.print("done\n", .{});
 }
 
 fn packPixelsToDeviceFormat(pixels: []const u8, packed_pixels: []u8) void {
@@ -314,13 +317,13 @@ fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HE
     const w = c.MagickGetImageWidth(mw);
     const h = c.MagickGetImageHeight(mw);
 
-    std.debug.print("Original dimensions: {d}x{d}\n", .{ w, h });
+    std.log.debug("Original dimensions: {d}x{d}\n", .{ w, h });
     // This should be 48x64 with our test
     // Command line resize works differently than this. Here we need to find
     // new width and height based on the input aspect ratio ourselves
     const resize_dimensions = getNewDimensions(w, h, WIDTH, HEIGHT);
 
-    std.debug.print("Dimensions for resize: {d}x{d}\n", .{ resize_dimensions.width, resize_dimensions.height });
+    std.log.debug("Dimensions for resize: {d}x{d}\n", .{ resize_dimensions.width, resize_dimensions.height });
 
     status = c.MagickResizeImage(mw, resize_dimensions.width, resize_dimensions.height, c.UndefinedFilter);
     if (status == c.MagickFalse)
@@ -367,7 +370,6 @@ fn convertImage(alloc: std.mem.Allocator, filename: [:0]u8, pixels: *[WIDTH * HE
             }
             break;
         }
-        std.debug.print("left_spaces: {d}. Text: \"{s}\"\n", .{ left_spaces, text });
         x += (FONT_WIDTH * left_spaces);
         mw = try drawString(mw, text[@intCast(usize, left_spaces)..], x, y);
     }
