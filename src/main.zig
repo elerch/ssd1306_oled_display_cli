@@ -48,6 +48,30 @@ pub fn main() !void {
     const stdout = bw.writer();
     defer bw.flush() catch unreachable; // don't forget to flush!
 
+    // If we have stdin redirected, we want to process that before
+    // we take command line options. So cli will overwrite any lines specified
+    // from the file
+    const stdin_file = std.io.getStdIn();
+    var stdin_data: [WIDTH * HEIGHT + 1]u8 = undefined;
+    var line_inx: usize = 0;
+    defer {
+        for (0..line_inx) |i| {
+            alloc.free(@constCast(lines[i].*));
+        }
+    }
+    if (!stdin_file.isTty()) {
+        const read = try stdin_file.readAll(&stdin_data);
+        if (read == stdin_data.len) {
+            try std.io.getStdErr().writer().print("ERROR: data provided exceeds what can be sent to device!\n", .{});
+            try usage(args);
+        }
+        var it = std.mem.split(u8, &stdin_data, "\n");
+        while (it.next()) |line| {
+            const bwahahaha = try alloc.dupeZ(u8, line);
+            lines[line_inx] = &bwahahaha;
+            line_inx += 1;
+        }
+    }
     const opts = try processArgs(alloc, args, &lines);
     defer alloc.destroy(opts);
     if (opts.background_filename.len > 0) try stdout.print("Converting {s}\n", .{opts.background_filename});
