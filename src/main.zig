@@ -33,40 +33,62 @@ fn usage(args: [][]u8) !void {
     try writer.print("\te.g. \"-1 'hello world'\" will display \"hello world\" on line 1\n", .{});
     std.os.exit(1);
 }
+const Options = struct {
+    background_filename: [:0]u8,
+    device_file: [:0]u8,
+};
 pub fn main() !void {
     const alloc = std.heap.c_allocator;
     //defer alloc.deinit();
     const args = try std.process.argsAlloc(alloc);
     defer std.process.argsFree(alloc, args);
-    if (args.len < 2) try usage(args);
-    const prefix = "/dev/ttyUSB";
-    const device = try alloc.dupeZ(u8, args[1]);
-    defer alloc.free(device);
-    if (!std.mem.eql(u8, device, "-") and !std.mem.startsWith(u8, device, prefix)) try usage(args);
 
-    // stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
     const stdout_file = std.io.getStdOut().writer();
     var bw = std.io.bufferedWriter(stdout_file);
     const stdout = bw.writer();
     defer bw.flush() catch unreachable; // don't forget to flush!
 
-    var filename: [:0]u8 = @constCast("");
-    var b: [1]u8 = undefined;
-    const nothing: [:0]u8 = try std.fmt.bufPrintZ(&b, "", .{});
-    for (lines, 0..) |_, i| {
-        lines[i] = &nothing;
+    const opts = try processArgs(alloc, args, &lines);
+    defer alloc.destroy(opts);
+    if (opts.background_filename.len > 0) try stdout.print("Converting {s}\n", .{opts.background_filename});
+    var pixels: [WIDTH * HEIGHT]u8 = undefined;
+    try convertImage(alloc, opts.background_filename, &pixels, textForLine);
+    try bw.flush();
+    // var i: usize = 0;
+    // while (i < HEIGHT) {
+    //     try stdout.print("{d:0>2}: {s}\n", .{ i, fmtSliceGreyscaleImage(pixels[(i * WIDTH)..((i + 1) * WIDTH)]) });
+    //     // try stdout.print("{d:0>2}: {s}\n", .{ i, std.fmt.fmtSliceHexLower(pixels[(i * WIDTH)..((i + 1) * WIDTH)]) });
+    //     i += 1;
+    // }
+
+    // We should take the linux device file here, then inspect for ttyUSB vs
+    // i2c whatever and do the right thing from there...
+    try sendPixels(&pixels, opts.device_file, 0x3c);
+
+    // try stdout.print("Run `zig build test` to run the tests.\n", .{});
+}
+
+fn processArgs(allocator: std.mem.Allocator, args: [][:0]u8, line_array: *[LINES]*const [:0]u8) !*Options {
+    if (args.len < 2) try usage(args);
+    const prefix = "/dev/ttyUSB";
+    var opts = try allocator.create(Options);
+    opts.device_file = args[1];
+    if (!std.mem.eql(u8, opts.device_file, "-") and !std.mem.startsWith(u8, opts.device_file, prefix)) try usage(args);
+
+    opts.background_filename = @constCast("");
+    const nothing: [:0]u8 = @constCast("");
+    for (line_array.*, 0..) |_, i| {
+        line_array.*[i] = &nothing;
     }
     var is_filename = false;
     var line_number: ?usize = null;
-    for (args, 0..) |arg, i| {
+    for (args[1..], 1..) |arg, i| {
         if (std.mem.eql(u8, "-bg", arg)) {
             is_filename = true;
             continue;
         }
         if (is_filename) {
-            filename = args[i]; // arg capture changes value...
+            opts.background_filename = args[i]; // arg capture changes value...
             break;
         }
         if ((arg[0] == '-' and arg.len > 1) and areDigits(arg[1..])) {
@@ -81,30 +103,13 @@ pub fn main() !void {
                 );
                 std.os.exit(1);
             }
-            std.debug.print("line {d} text: \"{s}\"\n", .{ line, arg });
-            lines[line] = &args[i];
+            std.log.debug("line {d} text: \"{s}\"\n", .{ line, arg });
+            line_array.*[line] = &args[i];
             line_number = null;
             continue;
         }
     }
-
-    if (filename.len > 0) try stdout.print("Converting {s}\n", .{filename});
-    var pixels: [WIDTH * HEIGHT]u8 = undefined;
-    try convertImage(alloc, filename, &pixels, textForLine);
-    try stdout.print("Sending pixels to display\n", .{});
-    // var i: usize = 0;
-    // while (i < HEIGHT) {
-    //     try stdout.print("{d:0>2}: {s}\n", .{ i, fmtSliceGreyscaleImage(pixels[(i * WIDTH)..((i + 1) * WIDTH)]) });
-    //     // try stdout.print("{d:0>2}: {s}\n", .{ i, std.fmt.fmtSliceHexLower(pixels[(i * WIDTH)..((i + 1) * WIDTH)]) });
-    //     i += 1;
-    // }
-
-    // We should take the linux device file here, then inspect for ttyUSB vs
-    // i2c whatever and do the right thing from there...
-    try sendPixels(&pixels, device, 0x3c);
-    try stdout.print("done\n", .{});
-
-    // try stdout.print("Run `zig build test` to run the tests.\n", .{});
+    return opts;
 }
 
 fn areDigits(bytes: []u8) bool {
