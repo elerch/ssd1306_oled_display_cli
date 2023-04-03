@@ -42,7 +42,7 @@ pub fn main() !void {
     const prefix = "/dev/ttyUSB";
     const device = try alloc.dupeZ(u8, args[1]);
     defer alloc.free(device);
-    if (!std.mem.startsWith(u8, device, prefix)) try usage(args);
+    if (!std.mem.eql(u8, device, "-") and !std.mem.startsWith(u8, device, prefix)) try usage(args);
 
     // stdout is for the actual output of your application, for example if you
     // are implementing gzip, then only the compressed bytes should be sent to
@@ -69,7 +69,7 @@ pub fn main() !void {
             filename = args[i]; // arg capture changes value...
             break;
         }
-        if (arg[0] == '-' and areDigits(arg[1..])) {
+        if ((arg[0] == '-' and arg.len > 1) and areDigits(arg[1..])) {
             line_number = try std.fmt.parseInt(usize, arg[1..], 10);
             continue;
         }
@@ -116,6 +116,9 @@ fn areDigits(bytes: []u8) bool {
 }
 
 fn sendPixels(pixels: []const u8, file: [:0]const u8, device_id: u8) !void {
+    if (std.mem.eql(u8, file, "-"))
+        return sendPixelsToStdOut(pixels);
+
     if (@import("builtin").os.tag != .linux)
         @compileError("Linux only please!");
 
@@ -125,6 +128,16 @@ fn sendPixels(pixels: []const u8, file: [:0]const u8, device_id: u8) !void {
 
     // Send through linux i2c native
     return error.LinuxNativeNotImplemented;
+}
+
+fn sendPixelsToStdOut(pixels: []const u8) !void {
+    const stdout_file = std.io.getStdOut().writer();
+    var bw = std.io.bufferedWriter(stdout_file);
+    const stdout = bw.writer();
+    defer bw.flush() catch unreachable; // don't forget to flush!
+    for (0..HEIGHT) |i| {
+        try stdout.print("{d:0>2}: {s}\n", .{ i, fmtSliceGreyscaleImage(pixels[(i * WIDTH)..((i + 1) * WIDTH)]) });
+    }
 }
 
 fn sendPixelsThroughI2CDriver(pixels: []const u8, file: [*:0]const u8, device_id: u8) !void {
