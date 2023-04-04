@@ -1,4 +1,5 @@
 const std = @import("std");
+const display = @import("display.zig");
 const chars = @import("images/images.zig").chars;
 
 // The package manager will install headers from our dependency in zig's build
@@ -9,22 +10,7 @@ const c = @cImport({
     @cInclude("i2cdriver.h");
 });
 
-// Image specifications
-const WIDTH = 128;
-const HEIGHT = 64;
-
-// Text specifications
-const FONT_WIDTH = 5;
-const FONT_HEIGHT = 8;
-
-const CHARS_PER_LINE = 25; // 25 * 5 = 125 so we have 3px left over
-const BORDER_LEFT = 1; // 1 empty px left, 2 empty on right
-const LINES = 8;
-
-// Device specifications
-const PAGES = 8;
-
-var lines: [LINES]*[:0]u8 = undefined;
+var lines: [display.LINES]*[:0]u8 = undefined;
 
 fn usage(args: [][]u8) !void {
     const writer = std.io.getStdErr().writer();
@@ -52,10 +38,10 @@ pub fn main() !void {
     // we take command line options. So cli will overwrite any lines specified
     // from the file
     const stdin_file = std.io.getStdIn();
-    var stdin_data: [WIDTH * HEIGHT + 1]u8 = undefined;
+    var stdin_data: [display.WIDTH * display.HEIGHT + 1]u8 = undefined;
     // Need this to support deallocation of memory
     var line_inx: usize = 0;
-    var stdin_lines: [LINES][:0]u8 = undefined;
+    var stdin_lines: [display.LINES][:0]u8 = undefined;
     defer {
         for (0..line_inx) |i| {
             alloc.free(stdin_lines[i]);
@@ -84,7 +70,7 @@ pub fn main() !void {
     const opts = try processArgs(alloc, args, &lines);
     defer alloc.destroy(opts);
     if (opts.background_filename.len > 0) try stdout.print("Converting {s}\n", .{opts.background_filename});
-    var pixels: [WIDTH * HEIGHT]u8 = undefined;
+    var pixels: [display.WIDTH * display.HEIGHT]u8 = undefined;
     try convertImage(opts.background_filename, &pixels, textForLine);
     try bw.flush();
 
@@ -95,7 +81,7 @@ pub fn main() !void {
     // try stdout.print("Run `zig build test` to run the tests.\n", .{});
 }
 
-fn processArgs(allocator: std.mem.Allocator, args: [][:0]u8, line_array: *[LINES]*const [:0]u8) !*Options {
+fn processArgs(allocator: std.mem.Allocator, args: [][:0]u8, line_array: *[display.LINES]*const [:0]u8) !*Options {
     if (args.len < 2) try usage(args);
     const prefix = "/dev/ttyUSB";
     var opts = try allocator.create(Options);
@@ -119,10 +105,10 @@ fn processArgs(allocator: std.mem.Allocator, args: [][:0]u8, line_array: *[LINES
             continue;
         }
         if (line_number) |line| {
-            if (arg.len > CHARS_PER_LINE) {
+            if (arg.len > display.CHARS_PER_LINE) {
                 try std.io.getStdErr().writer().print(
                     "ERROR: text for line {d} has {d} chars, exceeding maximum length {d}\n",
-                    .{ line, arg.len, CHARS_PER_LINE },
+                    .{ line, arg.len, display.CHARS_PER_LINE },
                 );
                 std.os.exit(1);
             }
@@ -162,13 +148,16 @@ fn sendPixelsToStdOut(pixels: []const u8) !void {
     var bw = std.io.bufferedWriter(stdout_file);
     const stdout = bw.writer();
     defer bw.flush() catch unreachable; // don't forget to flush!
-    for (0..HEIGHT) |i| {
-        try stdout.print("{d:0>2}: {s}\n", .{ i, fmtSliceGreyscaleImage(pixels[(i * WIDTH)..((i + 1) * WIDTH)]) });
+    for (0..display.HEIGHT) |i| {
+        try stdout.print(
+            "{d:0>2}: {s}\n",
+            .{ i, fmtSliceGreyscaleImage(pixels[(i * display.WIDTH)..((i + 1) * display.WIDTH)]) },
+        );
     }
 }
 
 fn sendPixelsThroughI2CDriver(pixels: []const u8, file: [*:0]const u8, device_id: u8) !void {
-    var pixels_write_command = [_]u8{0x00} ** ((WIDTH * PAGES) + 1);
+    var pixels_write_command = [_]u8{0x00} ** ((display.WIDTH * display.PAGES) + 1);
     pixels_write_command[0] = 0x40;
     packPixelsToDeviceFormat(pixels, pixels_write_command[1..]);
     var i2c = c.I2CDriver{
@@ -228,8 +217,8 @@ fn sendPixelsThroughI2CDriver(pixels: []const u8, file: [*:0]const u8, device_id
 fn packPixelsToDeviceFormat(pixels: []const u8, packed_pixels: []u8) void {
     // Each u8 in pixels is a single bit. We need to pack these bits
     for (packed_pixels, 0..) |*b, i| {
-        const column = i % WIDTH;
-        const page = i / WIDTH;
+        const column = i % display.WIDTH;
+        const page = i / display.WIDTH;
 
         // if (column == 0) std.debug.print("{d}: ", .{page});
         // pixel array will be 8x as "high" as the data array we are sending to
@@ -238,7 +227,7 @@ fn packPixelsToDeviceFormat(pixels: []const u8, packed_pixels: []u8) void {
         //
         // To convert from the pixel array above, we need to:
         //   1. convert from device page to a base "row" in the pixel array
-        const row = page * PAGES;
+        const row = page * display.PAGES;
         //   2. We will have 8 rows for each base row
         //   3. Multiple each row by the width to get the index of the start of
         //      the row
@@ -253,14 +242,14 @@ fn packPixelsToDeviceFormat(pixels: []const u8, packed_pixels: []u8) void {
         //      per source byte
         //   2. Shift that bit into the proper position in our destination byte
 
-        b.* = (pixels[(0 + row) * WIDTH + column] & 0x01) << 0 |
-            (pixels[(1 + row) * WIDTH + column] & 0x01) << 1 |
-            (pixels[(2 + row) * WIDTH + column] & 0x01) << 2 |
-            (pixels[(3 + row) * WIDTH + column] & 0x01) << 3 |
-            (pixels[(4 + row) * WIDTH + column] & 0x01) << 4 |
-            (pixels[(5 + row) * WIDTH + column] & 0x01) << 5 |
-            (pixels[(6 + row) * WIDTH + column] & 0x01) << 6 |
-            (pixels[(7 + row) * WIDTH + column] & 0x01) << 7;
+        b.* = (pixels[(0 + row) * display.WIDTH + column] & 0x01) << 0 |
+            (pixels[(1 + row) * display.WIDTH + column] & 0x01) << 1 |
+            (pixels[(2 + row) * display.WIDTH + column] & 0x01) << 2 |
+            (pixels[(3 + row) * display.WIDTH + column] & 0x01) << 3 |
+            (pixels[(4 + row) * display.WIDTH + column] & 0x01) << 4 |
+            (pixels[(5 + row) * display.WIDTH + column] & 0x01) << 5 |
+            (pixels[(6 + row) * display.WIDTH + column] & 0x01) << 6 |
+            (pixels[(7 + row) * display.WIDTH + column] & 0x01) << 7;
 
         // std.debug.print("{s}", .{std.fmt.fmtSliceHexLower(&[_]u8{b.*})});
         // if (column == 127) std.debug.print("\n", .{});
@@ -305,7 +294,7 @@ fn reportMagickError(mw: ?*c.MagickWand) !void {
 fn textForLine(line: usize) []u8 {
     return lines[line].*;
 }
-fn convertImage(filename: [:0]u8, pixels: *[WIDTH * HEIGHT]u8, text_fn: *const fn (usize) []u8) !void {
+fn convertImage(filename: [:0]u8, pixels: *[display.WIDTH * display.HEIGHT]u8, text_fn: *const fn (usize) []u8) !void {
     c.MagickWandGenesis();
     defer c.MagickWandTerminus();
     var mw = c.NewMagickWand();
@@ -343,7 +332,7 @@ fn convertImage(filename: [:0]u8, pixels: *[WIDTH * HEIGHT]u8, text_fn: *const f
     // This should be 48x64 with our test
     // Command line resize works differently than this. Here we need to find
     // new width and height based on the input aspect ratio ourselves
-    const resize_dimensions = getNewDimensions(w, h, WIDTH, HEIGHT);
+    const resize_dimensions = getNewDimensions(w, h, display.WIDTH, display.HEIGHT);
 
     std.log.debug("Dimensions for resize: {d}x{d}\n", .{ resize_dimensions.width, resize_dimensions.height });
 
@@ -369,21 +358,21 @@ fn convertImage(filename: [:0]u8, pixels: *[WIDTH * HEIGHT]u8, text_fn: *const f
     // around it means that the offset will be negative
     status = c.MagickExtentImage(
         mw,
-        WIDTH,
-        HEIGHT,
-        -@intCast(isize, (WIDTH - resize_dimensions.width) / 2),
-        -@intCast(isize, (HEIGHT - resize_dimensions.height) / 2),
+        display.WIDTH,
+        display.HEIGHT,
+        -@intCast(isize, (display.WIDTH - resize_dimensions.width) / 2),
+        -@intCast(isize, (display.HEIGHT - resize_dimensions.height) / 2),
     );
 
     if (status == c.MagickFalse)
         return error.CouldNotSetExtent;
 
-    for (0..LINES) |i| {
+    for (0..display.LINES) |i| {
         const text = text_fn(i);
         if (text.len == 0) continue;
         // We have text!
-        const y: isize = FONT_HEIGHT * @intCast(isize, i);
-        var x: isize = BORDER_LEFT;
+        const y: isize = display.FONT_HEIGHT * @intCast(isize, i);
+        var x: isize = display.BORDER_LEFT;
         var left_spaces: isize = 0;
         for (text) |ch| {
             if (ch == ' ') {
@@ -392,7 +381,7 @@ fn convertImage(filename: [:0]u8, pixels: *[WIDTH * HEIGHT]u8, text_fn: *const f
             }
             break;
         }
-        x += (FONT_WIDTH * left_spaces);
+        x += (display.FONT_WIDTH * left_spaces);
         mw = try drawString(mw, text[@intCast(usize, left_spaces)..], x, y);
     }
 
@@ -415,12 +404,12 @@ fn convertImage(filename: [:0]u8, pixels: *[WIDTH * HEIGHT]u8, text_fn: *const f
     if (status == c.MagickFalse)
         return error.CouldNotQuantizeImage;
 
-    status = c.MagickExportImagePixels(mw, 0, 0, WIDTH, HEIGHT, "I", c.CharPixel, @ptrCast(*anyopaque, pixels));
+    status = c.MagickExportImagePixels(mw, 0, 0, display.WIDTH, display.HEIGHT, "I", c.CharPixel, @ptrCast(*anyopaque, pixels));
 
     if (status == c.MagickFalse)
         return error.CouldNotExportImage;
 
-    for (0..WIDTH * HEIGHT) |i| {
+    for (0..display.WIDTH * display.HEIGHT) |i| {
         switch (pixels[i]) {
             0x00 => pixels[i] = 0xFF,
             0xFF => pixels[i] = 0x00,
@@ -434,7 +423,7 @@ fn drawString(mw: ?*c.MagickWand, str: []const u8, x: isize, y: isize) !?*c.Magi
         rc = try drawCharacter(
             rc,
             ch,
-            -(x + @intCast(isize, FONT_WIDTH * i)),
+            -(x + @intCast(isize, display.FONT_WIDTH * i)),
             -y,
         );
     }
@@ -476,8 +465,8 @@ fn drawCharacter(mw: ?*c.MagickWand, char: u8, x: isize, y: isize) !?*c.MagickWa
         // I think our characters are offset by 6px in the x and 8 in the y
         status = c.MagickExtentImage(
             cw,
-            WIDTH,
-            HEIGHT,
+            display.WIDTH,
+            display.HEIGHT,
             x,
             y,
         );
@@ -526,9 +515,9 @@ test "gets correct bytes" {
     }
     const line: [:0]u8 = @constCast("Hello\\!");
     lines[5] = &line;
-    var pixels: [WIDTH * HEIGHT]u8 = undefined;
+    var pixels: [display.WIDTH * display.HEIGHT]u8 = undefined;
 
-    var expected_pixels: *const [WIDTH * HEIGHT]u8 = @embedFile("testExpectedBytes.bin");
+    var expected_pixels: *const [display.WIDTH * display.HEIGHT]u8 = @embedFile("testExpectedBytes.bin");
 
     // [_]u8{..,..,..}
     try convertImage(opts.background_filename, &pixels, textForLine);
