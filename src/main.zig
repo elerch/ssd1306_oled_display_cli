@@ -24,7 +24,7 @@ const LINES = 8;
 // Device specifications
 const PAGES = 8;
 
-var lines: [LINES]*const [:0]u8 = undefined;
+var lines: [LINES]*[:0]u8 = undefined;
 
 fn usage(args: [][]u8) !void {
     const writer = std.io.getStdErr().writer();
@@ -53,11 +53,17 @@ pub fn main() !void {
     // from the file
     const stdin_file = std.io.getStdIn();
     var stdin_data: [WIDTH * HEIGHT + 1]u8 = undefined;
+    // Need this to support deallocation of memory
     var line_inx: usize = 0;
+    var stdin_lines: [LINES][:0]u8 = undefined;
     defer {
         for (0..line_inx) |i| {
-            alloc.free(@constCast(lines[i].*));
+            alloc.free(stdin_lines[i]);
         }
+    }
+    var nothing: [:0]u8 = @constCast("");
+    for (lines, 0..) |_, i| {
+        lines[i] = &nothing;
     }
     if (!stdin_file.isTty()) {
         const read = try stdin_file.readAll(&stdin_data);
@@ -65,13 +71,16 @@ pub fn main() !void {
             try std.io.getStdErr().writer().print("ERROR: data provided exceeds what can be sent to device!\n", .{});
             try usage(args);
         }
-        var it = std.mem.split(u8, &stdin_data, "\n");
+        var read_data = stdin_data[0..read];
+        var it = std.mem.split(u8, read_data, "\n");
         while (it.next()) |line| {
-            const bwahahaha = try alloc.dupeZ(u8, line);
-            lines[line_inx] = &bwahahaha;
+            if (line.len == 0) continue;
+            stdin_lines[line_inx] = try alloc.dupeZ(u8, line);
+            lines[line_inx] = &stdin_lines[line_inx];
             line_inx += 1;
         }
     }
+    std.debug.print("delme: {s}\n", .{lines[0].*});
     const opts = try processArgs(alloc, args, &lines);
     defer alloc.destroy(opts);
     if (opts.background_filename.len > 0) try stdout.print("Converting {s}\n", .{opts.background_filename});
@@ -94,10 +103,6 @@ fn processArgs(allocator: std.mem.Allocator, args: [][:0]u8, line_array: *[LINES
     if (!std.mem.eql(u8, opts.device_file, "-") and !std.mem.startsWith(u8, opts.device_file, prefix)) try usage(args);
 
     opts.background_filename = @constCast("");
-    const nothing: [:0]u8 = @constCast("");
-    for (line_array.*, 0..) |_, i| {
-        line_array.*[i] = &nothing;
-    }
     var is_filename = false;
     var line_number: ?usize = null;
     for (args[1..], 1..) |arg, i| {
