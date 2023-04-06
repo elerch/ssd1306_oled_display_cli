@@ -46,6 +46,16 @@ pub fn build(b: *std.build.Builder) !void {
     exe.addIncludePath("lib/i2cdriver");
     exe.install();
 
+    const exe_fontgen = b.addExecutable(.{
+        .name = "fontgen",
+        .root_source_file = .{ .path = "src/fontgen.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    exe_fontgen.linkLibrary(im_dep.artifact("MagickWand"));
+    exe_fontgen.linkLibrary(z_dep.artifact("z"));
+    exe.step.dependOn(&exe_fontgen.run().step);
+
     // TODO: I believe we can use runArtifact on a second
     // exe with a different source file for font generation
     // taking us to a series of 5 byte arrays for each
