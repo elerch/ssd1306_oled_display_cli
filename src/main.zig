@@ -509,11 +509,11 @@ fn getNewDimensions(width: usize, height: usize, desired_width: usize, desired_h
 test "gets correct bytes" {
     const bg_file: [:0]u8 = @constCast("logo:");
     const opts = .{ .background_filename = bg_file, .device_file = "-" };
-    const empty: [:0]u8 = @constCast("");
+    var empty: [:0]u8 = @constCast("");
     for (&lines) |*line| {
         line.* = &empty;
     }
-    const line: [:0]u8 = @constCast("Hello\\!");
+    var line: [:0]u8 = @constCast("Hello\\!");
     lines[5] = &line;
     var pixels: [display.WIDTH * display.HEIGHT]u8 = undefined;
 
