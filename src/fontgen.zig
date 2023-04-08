@@ -7,10 +7,12 @@ const c = @cImport({
     @cInclude("MagickWand/MagickWand.h");
 });
 
+const display = @import("display.zig");
+
 // This is set in two places. If this needs adjustment be sure to change the
 // magick CLI command (where it is a string)
-const GLYPH_WIDTH = 5;
-const GLYPH_HEIGHT = 8;
+const GLYPH_WIDTH = display.FONT_WIDTH;
+const GLYPH_HEIGHT = display.FONT_HEIGHT;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
