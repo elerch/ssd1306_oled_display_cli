@@ -38,6 +38,7 @@ fn usage(args: [][]u8) !void {
 const Options = struct {
     background_filename: [:0]u8,
     device_file: [:0]u8,
+    flip: bool,
 };
 pub fn main() !void {
     defer deinit();
@@ -88,6 +89,10 @@ pub fn main() !void {
     var pixels: [display.WIDTH * display.HEIGHT]u8 = undefined;
     try convertImage(opts.background_filename, &pixels, noTextForLine);
     try addTextToImage(alloc, &pixels, &lines);
+    if (opts.flip) {
+        try stdout.print("Flipping\n", .{});
+        flipImage(&pixels);
+    }
     try bw.flush();
 
     // We should take the linux device file here, then inspect for ttyUSB vs
@@ -126,6 +131,10 @@ fn processArgs(args: [][:0]u8, line_array: *[display.LINES]*const [:0]u8) !Optio
     var is_filename = false;
     var line_number: ?usize = null;
     for (args[1..], 1..) |arg, i| {
+        if (std.mem.eql(u8, "-flip", arg)) {
+            opts.flip = true;
+            continue;
+        }
         if (std.mem.eql(u8, "-bg", arg)) {
             is_filename = true;
             continue;
@@ -161,6 +170,15 @@ fn areDigits(bytes: []u8) bool {
         if (!std.ascii.isDigit(byte)) return false;
     }
     return true;
+}
+fn flipImage(pixels: *[display.WIDTH * display.HEIGHT]u8) void {
+    for (pixels[0..(display.WIDTH * display.HEIGHT / 2)], 0..) |_, i| {
+        const dest_pixel = pixels[pixels.len - 1 - i];
+        const src_pixel = pixels[i];
+
+        pixels[pixels.len - 1 - i] = src_pixel;
+        pixels[i] = dest_pixel;
+    }
 }
 
 fn addTextToImage(allocator: std.mem.Allocator, pixels: *[display.WIDTH * display.HEIGHT]u8, data: []*[]u8) !void {
