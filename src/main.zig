@@ -131,8 +131,9 @@ fn processArgs(args: [][:0]u8, line_array: *[display.LINES]*const [:0]u8) !Optio
             continue;
         }
         if (is_filename) {
+            is_filename = false;
             opts.background_filename = args[i]; // arg capture changes value...
-            break;
+            continue;
         }
         if ((arg[0] == '-' and arg.len > 1) and areDigits(arg[1..])) {
             line_number = try std.fmt.parseInt(usize, arg[1..], 10);
