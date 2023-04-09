@@ -1,6 +1,9 @@
 const std = @import("std");
 const display = @import("display.zig");
-const chars = @import("images/images.zig").chars;
+
+// Disabling the image characters. To re-enabel, switch the import back and
+// adjust build.zig
+const chars = &[_][]const u8{""}; //@import("images/images.zig").chars;
 const fonts = @import("fonts/fonts.zig");
 const unpackBits = @import("fontgen.zig").unpackBits;
 

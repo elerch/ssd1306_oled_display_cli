@@ -56,12 +56,8 @@ pub fn build(b: *std.build.Builder) !void {
     exe_fontgen.linkLibrary(z_dep.artifact("z"));
     exe.step.dependOn(&exe_fontgen.run().step);
 
-    // TODO: I believe we can use runArtifact on a second
-    // exe with a different source file for font generation
-    // taking us to a series of 5 byte arrays for each
-    // character in a font.
-    exe.step.dependOn(&AsciiPrintableStep.create(b, .{ .path = "src/images" }).step);
-    // exe.step.dependOn((try fontGeneration(b, target)));
+    // If image based characters are needed, uncomment this
+    // exe.step.dependOn(&AsciiPrintableStep.create(b, .{ .path = "src/images" }).step);
     const run_cmd = exe.run();
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| {
