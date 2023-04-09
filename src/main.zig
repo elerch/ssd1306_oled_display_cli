@@ -83,8 +83,7 @@ pub fn main() !void {
             line_inx += 1;
         }
     }
-    const opts = try processArgs(alloc, args, &lines);
-    defer alloc.destroy(opts);
+    const opts = try processArgs(args, &lines);
     if (opts.background_filename.len > 0) try stdout.print("Converting {s}\n", .{opts.background_filename});
     var pixels: [display.WIDTH * display.HEIGHT]u8 = undefined;
     try convertImage(opts.background_filename, &pixels, noTextForLine);
@@ -114,14 +113,16 @@ fn deinit() void {
     font_arena = null;
 }
 
-fn processArgs(allocator: std.mem.Allocator, args: [][:0]u8, line_array: *[display.LINES]*const [:0]u8) !*Options {
+fn processArgs(args: [][:0]u8, line_array: *[display.LINES]*const [:0]u8) !Options {
     if (args.len < 2) try usage(args);
     const prefix = "/dev/ttyUSB";
-    var opts = try allocator.create(Options);
-    opts.device_file = args[1];
+    var opts = Options{
+        .device_file = args[1],
+        .flip = false,
+        .background_filename = @constCast(""),
+    };
     if (!std.mem.eql(u8, opts.device_file, "-") and !std.mem.startsWith(u8, opts.device_file, prefix)) try usage(args);
 
-    opts.background_filename = @constCast("");
     var is_filename = false;
     var line_number: ?usize = null;
     for (args[1..], 1..) |arg, i| {
