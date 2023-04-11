@@ -1,5 +1,6 @@
 const std = @import("std");
 const display = @import("display.zig");
+const i2cnative = @import("i2cnative.zig");
 
 // Disabling the image characters. To re-enabel, switch the import back and
 // adjust build.zig
@@ -120,13 +121,11 @@ fn deinit() void {
 
 fn processArgs(args: [][:0]u8, line_array: *[display.LINES]*const [:0]u8) !Options {
     if (args.len < 2) try usage(args);
-    const prefix = "/dev/ttyUSB";
     var opts = Options{
         .device_file = args[1],
         .flip = false,
         .background_filename = @constCast(""),
     };
-    if (!std.mem.eql(u8, opts.device_file, "-") and !std.mem.startsWith(u8, opts.device_file, prefix)) try usage(args);
 
     var is_filename = false;
     var line_number: ?usize = null;
@@ -303,8 +302,12 @@ fn sendPixels(pixels: []const u8, file: [:0]const u8, device_id: u8) !void {
     if (is_i2cdriver)
         return sendPixelsThroughI2CDriver(pixels, file, device_id);
 
+    const is_i2cnative = std.mem.startsWith(u8, file, "/dev/i2c");
+    if (is_i2cnative)
+        return i2cnative.sendPixels(pixels, file, device_id);
+
     // Send through linux i2c native
-    return error.LinuxNativeNotImplemented;
+    return error.UnkownDeviceType;
 }
 
 fn sendPixelsToStdOut(pixels: []const u8) !void {
@@ -323,7 +326,7 @@ fn sendPixelsToStdOut(pixels: []const u8) !void {
 fn sendPixelsThroughI2CDriver(pixels: []const u8, file: [*:0]const u8, device_id: u8) !void {
     var pixels_write_command = [_]u8{0x00} ** ((display.WIDTH * display.PAGES) + 1);
     pixels_write_command[0] = 0x40;
-    packPixelsToDeviceFormat(pixels, pixels_write_command[1..]);
+    display.packPixelsToDeviceFormat(pixels, pixels_write_command[1..]);
     var i2c = c.I2CDriver{
         .connected = 0,
         .port = 0,
@@ -378,51 +381,6 @@ fn sendPixelsThroughI2CDriver(pixels: []const u8, file: [*:0]const u8, device_id
     try stdout.print("done\n", .{});
 }
 
-fn packPixelsToDeviceFormat(pixels: []const u8, packed_pixels: []u8) void {
-    // Each u8 in pixels is a single bit. We need to pack these bits
-    for (packed_pixels, 0..) |*b, i| {
-        const column = i % display.WIDTH;
-        const page = i / display.WIDTH;
-
-        // if (column == 0) std.debug.print("{d}: ", .{page});
-        // pixel array will be 8x as "high" as the data array we are sending to
-        // the device. So the device column above is only our starter
-        // Display has 8 pages, which is a set of 8 pixels with LSB at top of page
-        //
-        // To convert from the pixel array above, we need to:
-        //   1. convert from device page to a base "row" in the pixel array
-        const row = page * display.PAGES;
-        //   2. We will have 8 rows for each base row
-        //   3. Multiple each row by the width to get the index of the start of
-        //      the row
-        //   4. Add our current column index for the final pixel location in
-        //      the pixel array.
-        //
-        // Now that we have the proper index in the pixel array, we need to
-        // convert that into our destination byte. Each index will be a u8, either
-        // 0xff for on or 0x00 for off. So...
-        //
-        //   1. We will take the value and bitwise and with 0x01 so we get one bit
-        //      per source byte
-        //   2. Shift that bit into the proper position in our destination byte
-
-        b.* = (pixels[(0 + row) * display.WIDTH + column] & 0x01) << 0 |
-            (pixels[(1 + row) * display.WIDTH + column] & 0x01) << 1 |
-            (pixels[(2 + row) * display.WIDTH + column] & 0x01) << 2 |
-            (pixels[(3 + row) * display.WIDTH + column] & 0x01) << 3 |
-            (pixels[(4 + row) * display.WIDTH + column] & 0x01) << 4 |
-            (pixels[(5 + row) * display.WIDTH + column] & 0x01) << 5 |
-            (pixels[(6 + row) * display.WIDTH + column] & 0x01) << 6 |
-            (pixels[(7 + row) * display.WIDTH + column] & 0x01) << 7;
-
-        // std.debug.print("{s}", .{std.fmt.fmtSliceHexLower(&[_]u8{b.*})});
-        // if (column == 127) std.debug.print("\n", .{});
-
-        // Last 2 pages are yellow...16 pixels vertical
-        // if (page == 6 or page == 7) b.* = 0xff;
-        // b.* = 0xf0;
-    }
-}
 fn i2cWrite(i2c: *c.I2CDriver, bytes: []const u8) !void {
     var rc = c.i2c_write(i2c, @ptrCast([*c]const u8, bytes), bytes.len); // nn is size of array
     if (rc != 1)
