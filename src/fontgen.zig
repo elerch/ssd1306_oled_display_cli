@@ -37,10 +37,9 @@ pub fn main() !void {
     const generated_file = try proj_path.createFile("src/fonts/fonts.zig", .{
         .read = false,
         .truncate = true,
-        .lock = .Exclusive,
+        .lock = .exclusive,
         .lock_nonblocking = false,
         .mode = 0o666,
-        .intended_io_mode = .blocking,
     });
     defer generated_file.close();
 
@@ -74,7 +73,7 @@ pub fn main() !void {
         //     try writer.print("  \"\",\n", .{});
         //     continue;
         // }
-        const char_str = [_]u8{@intCast(u8, i)};
+        const char_str = [_]u8{@intCast(i)};
         // Need to escape the following chars: 32 (' ') 92 ('\')
         const label_param = parm: {
             switch (i) {
@@ -155,11 +154,11 @@ fn run(allocator: std.mem.Allocator, argv: []const []const u8) !void {
                 }
                 std.log.debug("[RUN] {s}", .{msg.items});
             }
-            std.os.exit(0xff);
+            std.posix.exit(0xff);
         },
         else => {
             std.log.err("command failed with: {}", .{result});
-            std.os.exit(0xff);
+            std.posix.exit(0xff);
         },
     }
 }
@@ -172,8 +171,8 @@ pub fn unpackBits(pixels: *[GLYPH_WIDTH * GLYPH_HEIGHT]u8) void {
     // overwrites
     var i: isize = (GLYPH_WIDTH * GLYPH_HEIGHT / 8 - 1);
     while (i >= 0) {
-        const start = @intCast(usize, i) * 8;
-        const packed_byte = pixels[@intCast(usize, i)];
+        const start = @as(usize, @intCast(i)) * 8;
+        const packed_byte = pixels[@intCast(i)];
         pixels[start + 7] = ((packed_byte & 0b10000000) >> 7) * 0xFF;
         pixels[start + 6] = ((packed_byte & 0b01000000) >> 6) * 0xFF;
         pixels[start + 5] = ((packed_byte & 0b00100000) >> 5) * 0xFF;
@@ -235,7 +234,7 @@ fn convertImage(filename: [:0]u8, pixels: *[GLYPH_WIDTH * GLYPH_HEIGHT]u8) !void
     if (status == c.MagickFalse)
         return error.CouldNotQuantizeImage;
 
-    status = c.MagickExportImagePixels(mw, 0, 0, GLYPH_WIDTH, GLYPH_HEIGHT, "I", c.CharPixel, @ptrCast(*anyopaque, pixels));
+    status = c.MagickExportImagePixels(mw, 0, 0, GLYPH_WIDTH, GLYPH_HEIGHT, "I", c.CharPixel, @as(*anyopaque, @ptrCast(pixels)));
 
     if (status == c.MagickFalse)
         return error.CouldNotExportImage;

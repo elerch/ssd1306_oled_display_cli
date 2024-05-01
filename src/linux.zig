@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub fn ioctl(handle: std.os.fd_t, request: u32, arg: usize) !void {
+pub fn ioctl(handle: std.posix.fd_t, request: u32, arg: usize) !void {
     const rc = std.os.linux.ioctl(handle, request, arg);
     try throwReturnCodeError(rc);
     return;
@@ -8,7 +8,7 @@ pub fn ioctl(handle: std.os.fd_t, request: u32, arg: usize) !void {
 
 pub fn throwReturnCodeError(return_code: usize) LinuxGenericError!void {
     // zig fmt: off
-    switch (std.os.errno(return_code)) {
+    switch (std.posix.errno(return_code)) {
         .SUCCESS               => return,
         .PERM                  => return LinuxGenericError.OperationNotPermittedError,
         .NOENT                 => return LinuxGenericError.NoSuchFileOrDirectoryError,

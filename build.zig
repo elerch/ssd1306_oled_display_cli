@@ -1,7 +1,7 @@
 const std = @import("std");
 const AsciiPrintableStep = @import("AsciiPrintableStep.zig");
 
-pub fn build(b: *std.build.Builder) !void {
+pub fn build(b: *std.Build) !void {
     // comptime {
     //     const current_zig = builtin.zig_version;
     //     const min_zig = std.SemanticVersion.parse("0.11.0-dev.1254+1f8f79cd5") catch return; // add helper functions to std.zig.Ast
@@ -31,7 +31,10 @@ pub fn build(b: *std.build.Builder) !void {
         .target = target,
         .optimize = optimize,
     });
-    i2cdriver.addCSourceFile("lib/i2cdriver/i2cdriver.c", &[_][]const u8{ "-Wall", "-Wpointer-sign", "-Werror" });
+    i2cdriver.addCSourceFile(.{
+        .file = b.path("lib/i2cdriver/i2cdriver.c"),
+        .flags = &[_][]const u8{ "-Wall", "-Wpointer-sign", "-Werror" },
+    });
     i2cdriver.linkLibC();
 
     const exe = b.addExecutable(.{
@@ -43,8 +46,8 @@ pub fn build(b: *std.build.Builder) !void {
     exe.linkLibrary(im_dep.artifact("MagickWand"));
     exe.linkLibrary(z_dep.artifact("z"));
     exe.linkLibrary(i2cdriver);
-    exe.addIncludePath("lib/i2cdriver");
-    exe.install();
+    exe.addIncludePath(b.path("lib/i2cdriver"));
+    b.installArtifact(exe);
 
     const exe_fontgen = b.addExecutable(.{
         .name = "fontgen",
@@ -54,11 +57,11 @@ pub fn build(b: *std.build.Builder) !void {
     });
     exe_fontgen.linkLibrary(im_dep.artifact("MagickWand"));
     exe_fontgen.linkLibrary(z_dep.artifact("z"));
-    exe.step.dependOn(&exe_fontgen.run().step);
+    exe.step.dependOn(&b.addRunArtifact(exe_fontgen).step);
 
     // If image based characters are needed, uncomment this
     // exe.step.dependOn(&AsciiPrintableStep.create(b, .{ .path = "src/images" }).step);
-    const run_cmd = exe.run();
+    const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| {
         run_cmd.addArgs(args);
@@ -75,10 +78,10 @@ pub fn build(b: *std.build.Builder) !void {
     exe_tests.linkLibrary(im_dep.artifact("MagickWand"));
     exe_tests.linkLibrary(z_dep.artifact("z"));
     exe_tests.linkLibrary(i2cdriver);
-    exe_tests.addIncludePath("lib/i2cdriver");
+    exe_tests.addIncludePath(b.path("lib/i2cdriver"));
 
     const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&exe_tests.run().step);
+    test_step.dependOn(&b.addRunArtifact(exe_tests).step);
 }
 
 // Should be able to remove this

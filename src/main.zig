@@ -34,7 +34,7 @@ fn usage(args: [][]u8) !void {
     try writer.print("usage: {s} <device> [-bg <image file>] [-<num> text]...\n", .{args[0]});
     try writer.print("\t-<num> text: line number and text to display\n", .{});
     try writer.print("\te.g. \"-1 'hello world'\" will display \"hello world\" on line 1\n", .{});
-    std.os.exit(1);
+    std.posix.exit(1);
 }
 const Options = struct {
     background_filename: [:0]u8,
@@ -76,7 +76,7 @@ pub fn main() !void {
             try std.io.getStdErr().writer().print("ERROR: data provided exceeds what can be sent to device!\n", .{});
             try usage(args);
         }
-        var read_data = stdin_data[0..read];
+        const read_data = stdin_data[0..read];
         var it = std.mem.split(u8, read_data, "\n");
         while (it.next()) |line| {
             if (line.len == 0) continue;
@@ -153,7 +153,7 @@ fn processArgs(args: [][:0]u8, line_array: *[display.LINES]*const [:0]u8) !Optio
                     "ERROR: text for line {d} has {d} chars, exceeding maximum length {d}\n",
                     .{ line, arg.len, display.CHARS_PER_LINE },
                 );
-                std.os.exit(1);
+                std.posix.exit(1);
             }
             std.log.debug("line {d} text: \"{s}\"\n", .{ line, arg });
             line_array.*[line] = &args[i];
@@ -181,7 +181,7 @@ fn flipImage(pixels: *[display.WIDTH * display.HEIGHT]u8) void {
 }
 
 fn addTextToImage(allocator: std.mem.Allocator, pixels: *[display.WIDTH * display.HEIGHT]u8, data: []*[]u8) !void {
-    var maybe_font_data = try getFontData(allocator, DEFAULT_FONT);
+    const maybe_font_data = try getFontData(allocator, DEFAULT_FONT);
 
     if (maybe_font_data == null) return error.FontNotFound;
     var font_data = maybe_font_data.?;
@@ -220,7 +220,7 @@ fn getFontData(allocator: std.mem.Allocator, font_name: []const u8) !?FontInnerH
     if (font_arena == null) {
         font_arena = std.heap.ArenaAllocator.init(allocator);
     }
-    var alloc = font_arena.?.allocator();
+    const alloc = font_arena.?.allocator();
     // The bit lookup will be a bit tricky because we have runtime value to look up
     // We can use an inline for but compute complexity is a bit crazy. Best to use a
     // hashmap here
@@ -277,7 +277,7 @@ fn getFontMap(allocator: std.mem.Allocator, comptime font_name: []const u8) !*Fo
                 .{fmtSliceHexLower(@field(font_struct, point.name))},
             );
         }
-        var key_ptr = try allocator.create(u21);
+        const key_ptr = try allocator.create(u21);
         key_ptr.* = std.fmt.parseInt(u21, point.name, 10) catch unreachable;
         map.putAssumeCapacity(
             key_ptr.*,
@@ -344,7 +344,7 @@ fn sendPixelsThroughI2CDriver(pixels: []const u8, file: [*:0]const u8, device_id
         .ccitt_crc = 0,
         .e_ccitt_crc = 0,
     };
-    const c_file = @ptrCast([*c]const u8, file);
+    const c_file: [*c]const u8 = @ptrCast(file);
     const stdout_file = std.io.getStdOut().writer();
     var bw = std.io.bufferedWriter(stdout_file);
     const stdout = bw.writer();
@@ -382,7 +382,7 @@ fn sendPixelsThroughI2CDriver(pixels: []const u8, file: [*:0]const u8, device_id
 }
 
 fn i2cWrite(i2c: *c.I2CDriver, bytes: []const u8) !void {
-    var rc = c.i2c_write(i2c, @ptrCast([*c]const u8, bytes), bytes.len); // nn is size of array
+    const rc = c.i2c_write(i2c, @ptrCast(bytes), bytes.len); // nn is size of array
     if (rc != 1)
         return error.BadWrite;
 }
@@ -439,7 +439,7 @@ fn formatSliceGreyscaleImage(
 fn reportMagickError(mw: ?*c.MagickWand) !void {
     var severity: c.ExceptionType = undefined;
     var description = c.MagickGetException(mw, &severity);
-    defer description = @ptrCast([*c]u8, c.MagickRelinquishMemory(description));
+    defer description = @ptrCast(c.MagickRelinquishMemory(description));
     try std.io.getStdErr().writer().print("{s}\n", .{description});
 }
 fn textForLine(line: usize) []u8 {
@@ -514,8 +514,8 @@ fn convertImage(filename: [:0]u8, pixels: *[display.WIDTH * display.HEIGHT]u8, t
         mw,
         display.WIDTH,
         display.HEIGHT,
-        -@intCast(isize, (display.WIDTH - resize_dimensions.width) / 2),
-        -@intCast(isize, (display.HEIGHT - resize_dimensions.height) / 2),
+        -@as(isize, @intCast((display.WIDTH - resize_dimensions.width) / 2)),
+        -@as(isize, @intCast((display.HEIGHT - resize_dimensions.height) / 2)),
     );
 
     if (status == c.MagickFalse)
@@ -525,7 +525,7 @@ fn convertImage(filename: [:0]u8, pixels: *[display.WIDTH * display.HEIGHT]u8, t
         const text = text_fn(i);
         if (text.len == 0) continue;
         // We have text!
-        const y: isize = display.FONT_HEIGHT * @intCast(isize, i);
+        const y: isize = display.FONT_HEIGHT * @as(isize, @intCast(i));
         var x: isize = display.BORDER_LEFT;
         var left_spaces: isize = 0;
         for (text) |ch| {
@@ -536,7 +536,7 @@ fn convertImage(filename: [:0]u8, pixels: *[display.WIDTH * display.HEIGHT]u8, t
             break;
         }
         x += (display.FONT_WIDTH * left_spaces);
-        mw = try drawString(mw, text[@intCast(usize, left_spaces)..], x, y);
+        mw = try drawString(mw, text[@intCast(left_spaces)..], x, y);
     }
 
     // We make the image monochrome by quantizing the image with 2 colors in the
@@ -558,7 +558,7 @@ fn convertImage(filename: [:0]u8, pixels: *[display.WIDTH * display.HEIGHT]u8, t
     if (status == c.MagickFalse)
         return error.CouldNotQuantizeImage;
 
-    status = c.MagickExportImagePixels(mw, 0, 0, display.WIDTH, display.HEIGHT, "I", c.CharPixel, @ptrCast(*anyopaque, pixels));
+    status = c.MagickExportImagePixels(mw, 0, 0, display.WIDTH, display.HEIGHT, "I", c.CharPixel, @as(*anyopaque, @ptrCast(pixels)));
 
     if (status == c.MagickFalse)
         return error.CouldNotExportImage;
@@ -577,7 +577,7 @@ fn drawString(mw: ?*c.MagickWand, str: []const u8, x: isize, y: isize) !?*c.Magi
         rc = try drawCharacter(
             rc,
             ch,
-            -(x + @intCast(isize, display.FONT_WIDTH * i)),
+            -(x + @as(isize, @intCast(display.FONT_WIDTH * i))),
             -y,
         );
     }
@@ -596,7 +596,7 @@ fn drawCharacter(mw: ?*c.MagickWand, char: u8, x: isize, y: isize) !?*c.MagickWa
     }
     const image_char = chars[char];
     if (image_char.len == 0) return error.CharacterNotSupported;
-    var status = c.MagickReadImageBlob(cw, @ptrCast(?*const anyopaque, image_char), image_char.len);
+    var status = c.MagickReadImageBlob(cw, @ptrCast(image_char), image_char.len);
     if (status == c.MagickFalse) unreachable; // Something is terribly wrong if this fails
 
     // For character placement, we need to set the image to the correct
@@ -650,20 +650,20 @@ const Dimensions = struct {
 fn getNewDimensions(width: usize, height: usize, desired_width: usize, desired_height: usize) Dimensions {
     // assuming we're shrinking for now.
     // TODO: Handle expansion
-    const width_ratio = @intToFloat(f64, width) / @intToFloat(f64, desired_width);
-    const height_ratio = @intToFloat(f64, height) / @intToFloat(f64, desired_height);
+    const width_ratio = @as(f64, @floatFromInt(width)) / @as(f64, @floatFromInt(desired_width));
+    const height_ratio = @as(f64, @floatFromInt(height)) / @as(f64, @floatFromInt(desired_height));
     const resize_ratio = if (width_ratio > height_ratio) width_ratio else height_ratio;
 
     return .{
-        .width = @floatToInt(usize, @intToFloat(f64, width) / resize_ratio), // 48,
-        .height = @floatToInt(usize, @intToFloat(f64, height) / resize_ratio), // 64,
+        .width = @intFromFloat(@as(f64, @floatFromInt(width)) / resize_ratio), // 48,
+        .height = @intFromFloat(@as(f64, @floatFromInt(height)) / resize_ratio), // 64,
     };
 }
 test "gets proper font data" {
     // std.testing.log_level = .debug;
     std.log.debug("\n", .{});
     defer deinit();
-    var maybe_font_data = try getFontData(std.testing.allocator, DEFAULT_FONT);
+    const maybe_font_data = try getFontData(std.testing.allocator, DEFAULT_FONT);
     try std.testing.expect(maybe_font_data != null);
     var font_data = maybe_font_data.?;
 

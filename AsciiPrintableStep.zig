@@ -11,7 +11,7 @@ path: []const u8,
 pub fn create(b: *std.build.Builder, opt: struct {
     path: []const u8,
 }) *AsciiPrintableStep {
-    var result = b.allocator.create(AsciiPrintableStep) catch @panic("OOM");
+    const result = b.allocator.create(AsciiPrintableStep) catch @panic("OOM");
     result.* = AsciiPrintableStep{
         .step = std.build.Step.init(.{
             .id = .custom,
@@ -40,7 +40,7 @@ fn hasDependency(step: *const std.build.Step, dep_candidate: *const std.build.St
 }
 
 fn make(step: *std.build.Step, _: *std.Progress.Node) !void {
-    const self = @fieldParentPtr(AsciiPrintableStep, "step", step);
+    const self: AsciiPrintableStep = @fieldParentPtr("step", step);
 
     const zig_file = std.fmt.allocPrint(self.builder.allocator, "{s}/images.zig", .{self.path}) catch @panic("OOM");
     defer self.builder.allocator.free(zig_file);
@@ -67,7 +67,7 @@ fn make(step: *std.build.Step, _: *std.Progress.Node) !void {
             //     try writer.print("  \"\",\n", .{});
             //     continue;
             // }
-            const char_str = [_]u8{@intCast(u8, i)};
+            const char_str = [_]u8{@intCast(i)};
             // Need to escape the following chars: 32 (' ') 92 ('\')
             const label_param = parm: {
                 switch (i) {
