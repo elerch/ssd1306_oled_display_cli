@@ -14,6 +14,8 @@ jobs:
         with:
           version: 0.12.0
       - uses: elerch/zig-action-cache@v1.1.6
+      - name: Install system dependencies
+        run: apt-get update && apt-get install fonts-hack imagemagick
       - name: Build project
         run: zig build --summary all
       - name: Run tests
