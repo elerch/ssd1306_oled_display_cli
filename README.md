@@ -57,7 +57,7 @@ Initialization sequence:
 0x00 0xaf      # Turn on display
 ```
 
-Note that most real applications do a bunch of other things so as not to
-assume any specific state on startup.
+Note that most real applications do a bunch of other things so as not to assume
+any specific state on startup.
 
 [Reference](https://github.com/adafruit/Adafruit_SSD1306/blob/master/Adafruit_SSD1306.cpp#L565-L616)
