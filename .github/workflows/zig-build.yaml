@@ -14,7 +14,8 @@ jobs:
         with:
           version: 0.12.0
       - uses: elerch/zig-action-cache@v1.1.6
-      - name: Install system dependencies
+      - name: Install system dependencies (Github)
+        if: env.GITEA_ACTIONS != 'true'
         run: |
           sudo apt-get update 
           sudo apt-get install fonts-hack # imagemagick (container has imagemagick, but version 6)
@@ -22,6 +23,16 @@ jobs:
           tar xzf 7.1.1-31.tar.gz
           cd ImageMagick-7.1.1-31/
           ./configure && sudo make install && sudo ldconfig /usr/local/lib
+          cd ..
+      - name: Install system dependencies (Gitea)
+        if: env.GITEA_ACTIONS == 'true'
+        run: |
+          apt-get update 
+          apt-get install fonts-hack # imagemagick (container has imagemagick, but version 6)
+          curl -LOs https://github.com/ImageMagick/ImageMagick/archive/refs/tags/7.1.1-31.tar.gz
+          tar xzf 7.1.1-31.tar.gz
+          cd ImageMagick-7.1.1-31/
+          ./configure && make install && ldconfig /usr/local/lib
           cd ..
       - name: Build project
         run: zig build --summary all
