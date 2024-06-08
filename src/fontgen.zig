@@ -130,7 +130,7 @@ fn run(allocator: std.mem.Allocator, argv: []const []const u8) !void {
     var env_map = try std.process.getEnvMap(allocator);
     defer env_map.deinit();
 
-    var child = std.ChildProcess.init(argv, allocator);
+    var child = std.process.Child.init(argv, allocator);
 
     child.stdin_behavior = .Ignore;
     child.stdout_behavior = .Inherit;
