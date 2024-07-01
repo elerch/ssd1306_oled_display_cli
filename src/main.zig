@@ -77,7 +77,7 @@ pub fn main() !void {
             try usage(args);
         }
         const read_data = stdin_data[0..read];
-        var it = std.mem.split(u8, read_data, "\n");
+        var it = std.mem.splitScalar(u8, read_data, '\n');
         while (it.next()) |line| {
             if (line.len == 0) continue;
             stdin_lines[line_inx] = try alloc.dupeZ(u8, line);
